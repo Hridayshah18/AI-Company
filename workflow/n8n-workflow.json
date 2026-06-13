@@ -1,0 +1,217 @@
+{
+  "name": "AI Company - Multi Agent Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ai-company-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-intake",
+      "name": "📥 Google Form Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 400],
+      "notes": "Receives data from Google Form: businessName, goal, budget, industry, email"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nreturn [{\n  json: {\n    businessName: body.businessName || body['Business Name'] || 'Unknown Business',\n    goal: body.goal || body['Goal'] || 'Grow business',\n    budget: body.budget || body['Budget'] || '₹10,000',\n    industry: body.industry || body['Industry'] || 'General',\n    email: body.email || body['Email'] || '',\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "parse-input",
+      "name": "🔧 Parse Form Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are the Research Agent of an AI company. Given a client request, produce a structured Research Report covering: Target Market, Competitor Analysis (3 competitors), Market Opportunities, Industry Trends, and a final Recommendation. Be concise and actionable. Format with clear markdown headers."
+            },
+            {
+              "role": "user",
+              "content": "=Business Name: {{$json.businessName}}\nGoal: {{$json.goal}}\nBudget: {{$json.budget}}\nIndustry: {{$json.industry}}\n\nGenerate a complete Research Report."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "research-agent",
+      "name": "🔬 Research Agent",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [700, 200]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are the Content Agent of an AI company. Given a client request, produce a complete Content Package including: Brand Tagline, 3 Social Media Posts (Instagram/Facebook/Twitter), 3 Email Subject Lines, 1 Blog Post Title + Outline (5 sections), and a 50-word Ad Copy. Make all content energetic and tailored to the industry."
+            },
+            {
+              "role": "user",
+              "content": "=Business Name: {{$json.businessName}}\nGoal: {{$json.goal}}\nBudget: {{$json.budget}}\nIndustry: {{$json.industry}}\n\nGenerate a complete Content Package."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "content-agent",
+      "name": "✍️ Content Agent",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [700, 400]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are the Analytics Agent of an AI company. Given a client request, produce an Analytics Report with: 5 KPIs with 30-day targets and free tracking tools, 3 risks with mitigation strategies, a 30-day success snapshot, and 4 weekly check-in questions. Be data-driven and realistic."
+            },
+            {
+              "role": "user",
+              "content": "=Business Name: {{$json.businessName}}\nGoal: {{$json.goal}}\nBudget: {{$json.budget}}\nIndustry: {{$json.industry}}\n\nGenerate a complete Analytics Report."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "analytics-agent",
+      "name": "📊 Analytics Agent",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [700, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputs = $input.all();\nconst getText = (item) => item?.json?.message?.content || item?.json?.choices?.[0]?.message?.content || '';\nreturn [{\n  json: {\n    researchReport: getText(inputs[0]),\n    contentPackage: getText(inputs[1]),\n    analyticsReport: getText(inputs[2])\n  }\n}];"
+      },
+      "id": "merge-outputs",
+      "name": "🔀 Merge Agent Outputs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 400]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are the Operations Agent of an AI company. Given outputs from Research, Content, and Analytics agents, produce a Master Operations Plan with: a 4-week task timeline (P1/P2/P3 priorities), task dependencies, max 3 human touchpoints, and a final summary. Goal: maximum automation, minimum human effort."
+            },
+            {
+              "role": "user",
+              "content": "=Business: {{$('parse-input').first().json.businessName}}\nGoal: {{$('parse-input').first().json.goal}}\nBudget: {{$('parse-input').first().json.budget}}\n\n--- RESEARCH ---\n{{$json.researchReport}}\n\n--- CONTENT ---\n{{$json.contentPackage}}\n\n--- ANALYTICS ---\n{{$json.analyticsReport}}\n\nGenerate the Master Operations Plan."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "operations-agent",
+      "name": "⚙️ Operations Agent",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [1200, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const formData = $('parse-input').first().json;\nconst merged = $('merge-outputs').first().json;\nconst ops = $input.first().json?.message?.content || $input.first().json?.choices?.[0]?.message?.content || '';\n\nreturn [{\n  json: {\n    businessName: formData.businessName,\n    goal: formData.goal,\n    budget: formData.budget,\n    industry: formData.industry,\n    email: formData.email,\n    timestamp: formData.timestamp,\n    researchSummary: merged.researchReport.substring(0, 500),\n    contentSummary: merged.contentPackage.substring(0, 500),\n    analyticsSummary: merged.analyticsReport.substring(0, 500),\n    operationsPlan: ops.substring(0, 500),\n    status: 'COMPLETED'\n  }\n}];"
+      },
+      "id": "compile-report",
+      "name": "📋 Compile Full Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 400]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": { "mode": "id", "value": "YOUR_GOOGLE_SHEET_ID_HERE" },
+        "sheetName": { "mode": "name", "value": "AI Company Reports" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{$json.timestamp}}",
+            "Business Name": "={{$json.businessName}}",
+            "Goal": "={{$json.goal}}",
+            "Budget": "={{$json.budget}}",
+            "Industry": "={{$json.industry}}",
+            "Email": "={{$json.email}}",
+            "Research Summary": "={{$json.researchSummary}}",
+            "Content Summary": "={{$json.contentSummary}}",
+            "Analytics Summary": "={{$json.analyticsSummary}}",
+            "Operations Plan": "={{$json.operationsPlan}}",
+            "Status": "={{$json.status}}"
+          }
+        },
+        "options": {}
+      },
+      "id": "google-sheets",
+      "name": "📊 Save to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [1680, 280]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'AI Company report generated!', businessName: $json.businessName, status: $json.status }) }}",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "✅ Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1680, 520]
+    }
+  ],
+  "connections": {
+    "📥 Google Form Webhook": {
+      "main": [[{ "node": "🔧 Parse Form Input", "type": "main", "index": 0 }]]
+    },
+    "🔧 Parse Form Input": {
+      "main": [[
+        { "node": "🔬 Research Agent", "type": "main", "index": 0 },
+        { "node": "✍️ Content Agent", "type": "main", "index": 0 },
+        { "node": "📊 Analytics Agent", "type": "main", "index": 0 }
+      ]]
+    },
+    "🔬 Research Agent": {
+      "main": [[{ "node": "🔀 Merge Agent Outputs", "type": "main", "index": 0 }]]
+    },
+    "✍️ Content Agent": {
+      "main": [[{ "node": "🔀 Merge Agent Outputs", "type": "main", "index": 1 }]]
+    },
+    "📊 Analytics Agent": {
+      "main": [[{ "node": "🔀 Merge Agent Outputs", "type": "main", "index": 2 }]]
+    },
+    "🔀 Merge Agent Outputs": {
+      "main": [[{ "node": "⚙️ Operations Agent", "type": "main", "index": 0 }]]
+    },
+    "⚙️ Operations Agent": {
+      "main": [[{ "node": "📋 Compile Full Report", "type": "main", "index": 0 }]]
+    },
+    "📋 Compile Full Report": {
+      "main": [[
+        { "node": "📊 Save to Google Sheets", "type": "main", "index": 0 },
+        { "node": "✅ Send Response", "type": "main", "index": 0 }
+      ]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}
